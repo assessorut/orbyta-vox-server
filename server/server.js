@@ -64,8 +64,8 @@ async function callOpenRouter(model, messages, maxTokens) {
   const body = {
     model: model,
     messages: messages,
-    temperature: 0.8,
-    max_tokens: maxTokens || 600,
+    temperature: 0.7,
+    max_tokens: Math.max(maxTokens || 0, 350), // mínimo 350 — evita truncamento
   };
   const r = await httpsPost(OR_URL, body, {
     'Authorization': 'Bearer ' + OR_KEY,
@@ -134,6 +134,16 @@ function handleRequest(req, res) {
             // Remover blocos de raciocínio (chain-of-thought) que alguns modelos incluem
             text = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
             text = text.replace(/^(Okay|Let me|I need to|First,)[\s\S]{0,500}?(?=\n\n|"|')/i, '').trim();
+
+            // Detectar meta-comentário em inglês (modelo "narrando" em vez de responder em personagem)
+            const metaPatterns = /\b(in character|should respond|needs to respond|the salesperson|max \d+ sentences|stay(ing)? in character|Carlos (needs|should|is)|Now,? the|He should|He's been|cautious about budget)\b/i;
+            const isMostlyEnglish = /^[a-zA-Z0-9\s.,'"!?():\-]{60,}$/.test(text.slice(0, 100));
+
+            if (metaPatterns.test(text) || isMostlyEnglish) {
+              console.error(`Modelo ${model} retornou meta-comentário/inglês, tentando próximo. Trecho:`, text.slice(0, 150));
+              lastError = 'Modelo retornou meta-comentário em inglês';
+              continue;
+            }
 
             if (text.trim()) {
               res.writeHead(200, { 'Content-Type': 'application/json' });
