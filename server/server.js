@@ -9,9 +9,9 @@ if (!PORT) {
   process.exit(1);
 }
 
-const OR_KEY   = process.env.OPENROUTER_API_KEY || '';
-const OR_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
-const OR_URL   = 'https://openrouter.ai/api/v1/chat/completions';
+const OR_KEY    = process.env.OPENROUTER_API_KEY || '';
+const OR_MODEL  = 'meta-llama/llama-3.3-70b-instruct:free';
+const OR_URL    = 'https://openrouter.ai/api/v1/chat/completions';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -53,9 +53,24 @@ function toOpenAIMessages(messages, systemPrompt) {
   const out = [];
   if (systemPrompt) out.push({ role: 'system', content: systemPrompt });
   messages.forEach(m => {
-    out.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content });
+    out.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '') });
   });
   return out;
+}
+
+async function callOpenRouter(model, messages, maxTokens) {
+  const body = {
+    model: model,
+    messages: messages,
+    temperature: 0.8,
+    max_tokens: maxTokens || 600,
+  };
+  const r = await httpsPost(OR_URL, body, {
+    'Authorization': 'Bearer ' + OR_KEY,
+    'HTTP-Referer': 'https://orbyta-vox-server-production.up.railway.app',
+    'X-Title': 'Orbyta Vox',
+  });
+  return r;
 }
 
 function handleRequest(req, res) {
@@ -87,51 +102,69 @@ function handleRequest(req, res) {
 
       if (!OR_KEY) {
         res.writeHead(503, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'OPENROUTER_API_KEY não configurada no servidor.' }));
+        res.end(JSON.stringify({ error: 'OPENROUTER_API_KEY não configurada.' }));
         return;
       }
 
       const ts = new Date().toLocaleTimeString('pt-BR');
-      console.log(`[${ts}] -> OpenRouter | msgs:${payload.messages?.length}`);
+      const messages = toOpenAIMessages(payload.messages || [], payload.system || '');
+      console.log(`[${ts}] -> OpenRouter | msgs:${messages.length}`);
 
-      const orBody = {
-        model: OR_MODEL,
-        messages: toOpenAIMessages(payload.messages || [], payload.system || ''),
-        temperature: 0.8,
-        max_tokens: payload.max_tokens || 600,
-        top_p: 0.95,
-      };
+      // Lista de modelos gratuitos para fallback em cascata
+      const models = [
+        'meta-llama/llama-3.3-70b-instruct:free',
+        'meta-llama/llama-3.1-8b-instruct:free',
+        'google/gemini-2.0-flash-exp:free',
+        'mistralai/mistral-7b-instruct:free',
+      ];
 
-      try {
-        const orRes = await httpsPost(OR_URL, orBody, {
-          'Authorization': 'Bearer ' + OR_KEY,
-          'HTTP-Referer': 'https://orbyta-vox.app',
-          'X-Title': 'Orbyta Vox',
-        });
-        console.log(`[${new Date().toLocaleTimeString('pt-BR')}] <- ${orRes.status}`);
+      let lastError = null;
 
-        if (orRes.status !== 200) {
-          console.error('OpenRouter erro:', orRes.body.slice(0, 300));
-          res.writeHead(orRes.status, { 'Content-Type': 'application/json' });
-          res.end(orRes.body);
-          return;
+      for (const model of models) {
+        try {
+          const orRes = await callOpenRouter(model, messages, payload.max_tokens);
+          console.log(`[${new Date().toLocaleTimeString('pt-BR')}] <- ${model} status:${orRes.status}`);
+
+          if (orRes.status === 200) {
+            const orData = JSON.parse(orRes.body);
+            const text = orData.choices?.[0]?.message?.content || '';
+
+            if (text.trim()) {
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                content: [{ type: 'text', text }],
+                model:   model,
+                role:    'assistant',
+              }));
+              return;
+            } else {
+              console.error(`Modelo ${model} retornou texto vazio. Body:`, orRes.body.slice(0, 400));
+              lastError = 'Resposta vazia do modelo ' + model;
+              continue;
+            }
+          } else {
+            console.error(`Modelo ${model} erro ${orRes.status}:`, orRes.body.slice(0, 400));
+            lastError = `${model}: ${orRes.status} - ${orRes.body.slice(0,200)}`;
+            // Se for erro de rate limit (429), tentar próximo modelo
+            // Se for erro de auth (401/403), parar — chave inválida
+            if (orRes.status === 401 || orRes.status === 403) {
+              res.writeHead(orRes.status, { 'Content-Type': 'application/json' });
+              res.end(orRes.body);
+              return;
+            }
+            continue;
+          }
+        } catch (err) {
+          console.error(`Erro de rede com ${model}:`, err.message);
+          lastError = err.message;
+          continue;
         }
-
-        const orData = JSON.parse(orRes.body);
-        const text = orData.choices?.[0]?.message?.content || '';
-
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          content: [{ type: 'text', text }],
-          model:   OR_MODEL,
-          role:    'assistant',
-        }));
-
-      } catch (err) {
-        console.error('Erro OpenRouter:', err.message);
-        res.writeHead(502, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Falha OpenRouter: ' + err.message }));
       }
+
+      // Todos os modelos falharam
+      console.error('Todos os modelos falharam. Último erro:', lastError);
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Todos os modelos IA falharam. Detalhe: ' + lastError }));
     });
     return;
   }
@@ -153,9 +186,9 @@ server.on('error', e => { console.error('Erro:', e.message); process.exit(1); })
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log('\n=========================================');
-  console.log('   Orbyta Vox - Servidor Railway (OpenRouter)');
+  console.log('   Orbyta Vox - Servidor Railway (OpenRouter + fallback)');
   console.log('=========================================');
   console.log(`Porta: ${PORT}`);
-  console.log(`Modelo: ${OR_MODEL}`);
+  console.log(`Modelo principal: ${OR_MODEL}`);
   console.log(`Chave: ${OR_KEY ? 'OK configurada' : 'AUSENTE'}\n`);
 });
