@@ -1,5 +1,5 @@
 {
-  "name ": "orbyta-vox-server",
+  "name": "orbyta-vox-server",
   "version": "1.0.0",
   "description": "Orbyta Vox — Servidor de simulação de vendas com Gemini AI",
   "main": "server.js",
