@@ -10,7 +10,7 @@ if (!PORT) {
 }
 
 const OR_KEY    = process.env.OPENROUTER_API_KEY || '';
-const OR_MODEL  = 'meta-llama/llama-3.3-70b-instruct:free';
+const OR_MODEL  = 'openrouter/free';
 const OR_URL    = 'https://openrouter.ai/api/v1/chat/completions';
 
 const MIME = {
@@ -112,10 +112,11 @@ function handleRequest(req, res) {
 
       // Lista de modelos gratuitos para fallback em cascata
       const models = [
+        'openrouter/free',
         'meta-llama/llama-3.3-70b-instruct:free',
-        'meta-llama/llama-3.1-8b-instruct:free',
         'google/gemini-2.0-flash-exp:free',
-        'mistralai/mistral-7b-instruct:free',
+        'deepseek/deepseek-r1:free',
+        'openai/gpt-oss-20b:free',
       ];
 
       let lastError = null;
