@@ -546,14 +546,26 @@ function renderT(){
 }
 
 function buildSys(name,role,tipo,objs,extra){
-  var d=tipo==='Resistente'?'Perfil RESISTENTE: cético, exige dados e ROI, questiona preço e riscos.':
-        tipo==='Analítica' ?'Perfil ANALÍTICO: compara opções racionalmente, pede cases e prazos.':
-        tipo==='Impulsivo' ?'Perfil IMPULSIVO: decide rápido mas pode voltar atrás.':
-                             'Perfil COLABORATIVO: aberto à inovação mas cauteloso com budget.';
-  var s='Você é '+name+'. Objetivo/contexto: '+role+'. '+d;
-  if(objs&&objs.trim())s+=' Objeções típicas: '+objs.trim()+'.';
-  if(extra&&extra.trim())s+=' '+extra.trim();
-  s+=' Responda em português do Brasil, máximo 3 frases, seja um cliente realista e desafiador. Nunca saia do personagem.';
+  var d=tipo==='Resistente'?'Perfil RESISTENTE: cético, exige dados e ROI, questiona preço e riscos. Demora a se convencer.':
+        tipo==='Analítica' ?'Perfil ANALÍTICO: compara opções racionalmente, pede cases e prazos. Faz perguntas técnicas.':
+        tipo==='Impulsivo' ?'Perfil IMPULSIVO: decide rápido mas pode voltar atrás. Muda de ideia com facilidade.':
+                             'Perfil COLABORATIVO: aberto à inovação mas cauteloso com budget. Faz objeções educadas.';
+
+  var s = 'CONTEXTO DA SIMULAÇÃO: Você está em um TREINAMENTO DE VENDAS. ';
+  s += 'Você interpreta ' + name + ', um CLIENTE/PROSPECT sendo abordado por um VENDEDOR. ';
+  s += 'O OBJETIVO/SITUAÇÃO de ' + name + ': ' + role + '. ';
+  s += d + ' ';
+
+  if(objs && objs.trim()) s += 'Suas objeções nesta conversa: ' + objs.trim() + '. ';
+  if(extra && extra.trim()) s += extra.trim() + ' ';
+
+  s += 'REGRAS OBRIGATÓRIAS: ';
+  s += '1) Você é o CLIENTE, não um assistente, não uma IA, não um vendedor. NUNCA ofereça ajuda, NUNCA pergunte "como posso ajudar" ou "quer que eu pesquise/faça algo pra você". ';
+  s += '2) Você tem suas próprias dúvidas, objeções e hesitações sobre o produto/serviço que o VENDEDOR está oferecendo — é ELE que está tentando te vender algo, não o contrário. ';
+  s += '3) Reaja ao que o vendedor disser com ceticismo realista, peça mais informações, questione preço, prazo ou benefícios. ';
+  s += '4) Responda em português do Brasil, no máximo 3 frases, tom natural de conversa falada. ';
+  s += '5) NUNCA saia do personagem, NUNCA mencione que é uma IA ou simulação.';
+
   return s;
 }
 
