@@ -522,9 +522,10 @@ function renderP(){
   c.innerHTML=pers.map(function(p,i){
     var bg=i===selP?' s':'';
     var bd=p.tipo==='Resistente'?'br':p.tipo==='Analítica'?'ba':p.tipo==='Impulsivo'?'bi':'bc';
+    var genIcon=(p.genero==='F')?'\u2640':'\u2642';
     return '<div class="pc'+bg+'" onclick="selP='+i+';renderP()">'+
       '<div class="pav" style="width:42px;height:42px;font-size:13px;background:'+p.bg+';color:'+p.col+'">'+p.ini+'</div>'+
-      '<div style="flex:1"><div style="font-size:13px;font-weight:600;color:#1c1c1e">'+p.name+'</div><div style="font-size:11px;color:#8e8e93">'+p.role+'</div><span class="pbg '+bd+'">'+p.tipo+'</span></div>'+
+      '<div style="flex:1"><div style="font-size:13px;font-weight:600;color:#1c1c1e">'+p.name+' <span style="font-size:11px;color:var(--gray)">'+genIcon+'</span></div><div style="font-size:11px;color:#8e8e93">'+p.role+'</div><span class="pbg '+bd+'">'+p.tipo+'</span></div>'+
       '<div class="pac">'+
         (i===selP?'<span style="color:#1D9E75;font-size:18px;margin-right:4px">✓</span>':'')+
         '<button class="ib" onclick="event.stopPropagation();editP('+i+')">✏️</button>'+
@@ -579,10 +580,13 @@ function editP(i){
   var cur=tipos.indexOf(p.tipo)+1||1;
   var to=prompt('Perfil:\n1=Resistente\n2=Analitica\n3=Colaborativo\n4=Impulsivo',cur+'');if(to===null)return;
   var tipo=tipos[(parseInt(to,10)||1)-1]||p.tipo;
+  var curG=(p.genero==='F')?'2':'1';
+  var gn=prompt('Voz do cliente:\n1=Masculina\n2=Feminina',curG);if(gn===null)return;
+  var genero=(parseInt(gn,10)===2)?'F':'M';
   var ob=prompt('Objecoes tipicas:',p.objs||'');if(ob===null)return;
   var ex=prompt('Instrucao extra:',p.extra||'');if(ex===null)return;
   var ini=n.trim().split(' ').slice(0,2).map(function(w){return w[0].toUpperCase();}).join('');
-  pers[i]=Object.assign({},p,{name:n.trim(),role:r.trim(),tipo:tipo,ini:ini,objs:ob,extra:ex,sys:buildSys(n.trim(),r.trim(),tipo,ob,ex)});
+  pers[i]=Object.assign({},p,{name:n.trim(),role:r.trim(),tipo:tipo,genero:genero,ini:ini,objs:ob,extra:ex,sys:buildSys(n.trim(),r.trim(),tipo,ob,ex)});
   renderP();
 }
 
@@ -834,7 +838,29 @@ function onMic(){
 }
 
 // ── TTS ──────────────────────────────────────────────────
-function loadVoices(){var vs=speechSynthesis.getVoices().filter(function(v){return v.lang&&v.lang.indexOf('pt')===0;});if(!voice&&vs.length)voice=vs[0];}
+var voiceM=null, voiceF=null;
+function loadVoices(){
+  var vs=speechSynthesis.getVoices().filter(function(v){return v.lang&&v.lang.indexOf('pt')===0;});
+  if(!vs.length) return;
+
+  // Heurística: nomes de vozes femininas costumam conter estes termos
+  var femaleHints=/female|woman|mulher|feminin|luciana|maria|joana|fernanda|camila|raquel|vitoria|vitória|francisca|ines|inês|google português/i;
+  var maleHints=/male|man|homem|masculin|daniel|ricardo|felipe|diego|antonio|antônio|joao|joão|miguel/i;
+
+  var females=vs.filter(function(v){return femaleHints.test(v.name)&&!maleHints.test(v.name);});
+  var males=vs.filter(function(v){return maleHints.test(v.name);});
+
+  voiceF = females[0] || vs[0];
+  voiceM = males[0] || vs[vs.length>1?1:0];
+
+  if(!voice) voice=vs[0];
+}
+
+function pickVoice(genero){
+  if(genero==='F' && voiceF) return voiceF;
+  if(genero==='M' && voiceM) return voiceM;
+  return voice;
+}
 
 function spk(text){
   speechSynthesis.cancel();
@@ -843,7 +869,9 @@ function spk(text){
   startSpkAnim();
   var u=new SpeechSynthesisUtterance(text);
   u.lang='pt-BR';u.rate=spd;u.pitch=1;
-  if(voice)u.voice=voice;
+  var p=pers[selP];
+  var v=pickVoice(p?p.genero:null);
+  if(v)u.voice=v;
   var est=Math.max(3000,text.length/12*(1/spd)*1000+2000);
   var safe=setTimeout(function(){if(VS==='speaking')onSpkDone();},est);
   u.onend=function(){clearTimeout(safe);onSpkDone();};
