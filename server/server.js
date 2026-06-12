@@ -10,7 +10,7 @@ if (!PORT) {
 }
 
 const OR_KEY    = process.env.OPENROUTER_API_KEY || '';
-const OR_MODEL  = 'openrouter/free';
+const OR_MODEL  = 'meta-llama/llama-3.3-70b-instruct:free';
 const OR_URL    = 'https://openrouter.ai/api/v1/chat/completions';
 
 const MIME = {
@@ -51,7 +51,9 @@ function httpsPost(url, body, headers) {
 
 function toOpenAIMessages(messages, systemPrompt) {
   const out = [];
-  if (systemPrompt) out.push({ role: 'system', content: systemPrompt });
+  const langGuard = 'IMPORTANTE: Responda APENAS em português do Brasil. NUNCA escreva em inglês. NUNCA inclua raciocínio, pensamentos, explicações sobre o que você vai fazer, ou tags como <think>. Responda APENAS com a fala direta do personagem, sem nenhum texto adicional antes ou depois.';
+  const fullSystem = systemPrompt ? (systemPrompt + '\n\n' + langGuard) : langGuard;
+  out.push({ role: 'system', content: fullSystem });
   messages.forEach(m => {
     out.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '') });
   });
@@ -112,10 +114,9 @@ function handleRequest(req, res) {
 
       // Lista de modelos gratuitos para fallback em cascata
       const models = [
-        'openrouter/free',
         'meta-llama/llama-3.3-70b-instruct:free',
         'google/gemini-2.0-flash-exp:free',
-        'deepseek/deepseek-r1:free',
+        'openrouter/free',
         'openai/gpt-oss-20b:free',
       ];
 
@@ -128,7 +129,11 @@ function handleRequest(req, res) {
 
           if (orRes.status === 200) {
             const orData = JSON.parse(orRes.body);
-            const text = orData.choices?.[0]?.message?.content || '';
+            let text = orData.choices?.[0]?.message?.content || '';
+
+            // Remover blocos de raciocínio (chain-of-thought) que alguns modelos incluem
+            text = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+            text = text.replace(/^(Okay|Let me|I need to|First,)[\s\S]{0,500}?(?=\n\n|"|')/i, '').trim();
 
             if (text.trim()) {
               res.writeHead(200, { 'Content-Type': 'application/json' });
