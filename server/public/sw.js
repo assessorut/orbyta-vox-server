@@ -1,29 +1,22 @@
-const CACHE = 'vendacoach-v1';
-const ASSETS = ['/', '/index.html', '/manifest.json'];
+const CACHE_NAME = 'orbyta-vox-v3'; // versão incrementada — força atualização
 
 self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(ASSETS))
-  );
   self.skipWaiting();
 });
 
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+      Promise.all(keys.map(k => k !== CACHE_NAME ? caches.delete(k) : null))
     )
   );
   self.clients.claim();
 });
 
+// Network-first: sempre tenta buscar versão nova primeiro
 self.addEventListener('fetch', e => {
-  // Chamadas à API sempre vão para a rede
-  if (e.request.url.includes('/api/') || e.request.url.includes('/health')) {
-    e.respondWith(fetch(e.request));
-    return;
-  }
+  if (e.request.method !== 'GET') return;
   e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request))
+    fetch(e.request).catch(() => caches.match(e.request))
   );
 });
