@@ -1,0 +1,16 @@
+{
+  "name": "VendaCoach Pro",
+  "short_name": "VendaCoach",
+  "description": "Treinador de vendas com IA e interação por voz",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1D9E75",
+  "theme_color": "#1D9E75",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "categories": ["business", "education", "productivity"],
+  "lang": "pt-BR"
+}
